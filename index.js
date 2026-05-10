@@ -15,7 +15,7 @@ import pino from 'pino';
 import readline from 'node:readline';
 
 // ─── CONFIG ───────────────────────────────
-const ADMIN_PHONE = '50936989362';
+const ADMIN_PHONE = '237688581463';
 
 // ─── DATABASE ─────────────────────────────
 const db = new Database('miku.db');
