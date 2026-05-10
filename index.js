@@ -12,6 +12,7 @@ import { Boom } from '@hapi/boom';
 import Database from 'better-sqlite3';
 import cron from 'node-cron';
 import pino from 'pino';
+import qrcode from 'qrcode-terminal';
 
 // ─── CONFIG ───────────────────────────────
 const ADMIN_PHONE = '50936989362';
@@ -256,13 +257,16 @@ async function startBot() {
     version,
     auth: state,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: true,
     markOnlineOnConnect: false,
   });
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      console.log('📲 Scanne ce QR code avec WhatsApp :');
+      qrcode.generate(qr, { small: true });
+    }
     if (connection === 'close') {
       const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
