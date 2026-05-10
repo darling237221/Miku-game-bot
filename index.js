@@ -12,7 +12,7 @@ import { Boom } from '@hapi/boom';
 import Database from 'better-sqlite3';
 import cron from 'node-cron';
 import pino from 'pino';
-import qrcode from 'qrcode-terminal';
+import readline from 'node:readline';
 
 // ─── CONFIG ───────────────────────────────
 const ADMIN_PHONE = '50936989362';
@@ -248,6 +248,17 @@ function buildShopMenu() {
   return menu;
 }
 
+// ─── PAIRING ──────────────────────────────
+function askPhoneNumber() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question('📞 Entre le numéro WhatsApp du bot (format international sans +, ex: 50936989362) : ', (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
 // ─── BOT ──────────────────────────────────
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth');
@@ -260,13 +271,30 @@ async function startBot() {
     markOnlineOnConnect: false,
   });
 
+  if (!sock.authState.creds.registered) {
+    const raw = process.env.BOT_PHONE || (await askPhoneNumber());
+    const phoneNumber = raw.replace(/\D/g, '');
+    if (!phoneNumber) {
+      console.error('❌ Numéro invalide. Relance avec BOT_PHONE=509XXXXXXXX ou saisis-le au prompt.');
+      process.exit(1);
+    }
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(phoneNumber);
+        const pretty = code.match(/.{1,4}/g)?.join('-') ?? code;
+        console.log('\n╔══════════════════════════════╗');
+        console.log(`║  🔑  CODE DE PAIRING : ${pretty}  ║`);
+        console.log('╚══════════════════════════════╝');
+        console.log('📱 WhatsApp → Paramètres → Appareils connectés → Lier un appareil → Lier avec un numéro de téléphone\n');
+      } catch (err) {
+        console.error('❌ Échec de la demande de pairing code :', err?.message || err);
+      }
+    }, 3000);
+  }
+
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      console.log('📲 Scanne ce QR code avec WhatsApp :');
-      qrcode.generate(qr, { small: true });
-    }
+  sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
     if (connection === 'close') {
       const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
